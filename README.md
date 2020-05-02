@@ -1,26 +1,22 @@
-# Mqtt to Apache Kafka Connect [![Build Status](https://travis-ci.org/evokly/kafka-connect-mqtt.svg?branch=master)](https://travis-ci.org/evokly/kafka-connect-mqtt) [ ![Download](https://api.bintray.com/packages/evokly/maven/kafka-connect-mqtt/images/download.svg) ](https://bintray.com/evokly/maven/kafka-connect-mqtt/_latestVersion)
+# Mqtt to Apache Kafka Connect 
 
-## Prerequisites
-* [Apache Kafka](https://kafka.apache.org/) (0.10.x version) is publish-subscribe messaging rethought as a distributed commit log.
+MQTT Plugin for Kafka Connect. Intended to be built and provided to a Kafka Connect instance.
 
 ## Usage
-**For development:**
 
-* run check (checkstyle, findbugs, test):  
-  `./gradlew clean check`
+### Docker
 
-* run project:  
-  `connect-standalone.sh /usr/local/etc/kafka/connect-standalone.properties config/mqtt.properties`
-    * libs needs to be added to CLASSPATH:
-        * `kafka-connect-mqtt-{project.version}.jar`
-        * `org.eclipse.paho.client.mqttv3-1.0.2.jar`
-        * if used with ssl there are more.. (`./gradlew copyRuntimeLibs` copies all runtime libs to `./build/output/lib`)
+* Build image: `docker build -t [IMAGE_NAME] .`
+* Run container: `docker run --rm -d -v [JAR_OUT_DIR]:/jars [IMAGE_NAME]`
 
-**For production:**
+The container will exit after launch. `[JAR_OUT_DIR]` will contain the built jars that can be provided to Kafka Connect. `[JAR_OUT_DIR]` may be mounted to the jar plugin directory of a Kafka Connect container.
 
-* build project: `./gradlew clean jar` - output `./build/libs`
+### Gradle
 
-* generate API documentation: `./gradlew javadoc` - output `./build/docs/javadoc`
+* Build project: `./gradlew clean jar`
+  * Output dirs: `./build/libs` (project jar), `./build/output/lib` (external jars))
+  * Provide project jar and -- depending on the use case -- other required external jars to Kafka Connect Instance.
+* Generate API documentation: `./gradlew javadoc` (output dir `./build/docs/javadoc`)
 
 ## License
 See [LICENSE](LICENSE) file for License

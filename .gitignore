@@ -71,6 +71,9 @@ hs_err_pid*
 ### Gradle ###
 .gradle
 build/
+bin/
+
+.classpath
 
 # Ignore Gradle GUI config
 gradle-app.setting
@@ -107,5 +110,6 @@ Icon
 Network Trash Folder
 Temporary Items
 .apdisk
-
+.project
+.settings/
 /msg.bin

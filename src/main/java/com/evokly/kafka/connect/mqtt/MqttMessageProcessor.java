@@ -1,5 +1,6 @@
 package com.evokly.kafka.connect.mqtt;
 
+import org.apache.avro.Schema;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.eclipse.paho.client.mqttv3.MqttMessage;
 
@@ -10,7 +11,7 @@ import org.eclipse.paho.client.mqttv3.MqttMessage;
  **/
 public interface MqttMessageProcessor {
 
-    MqttMessageProcessor process(String topic, MqttMessage message);
+    MqttMessageProcessor process(String topic, MqttMessage message, Schema valueSchema);
 
     SourceRecord[] getRecords(String kafkaTopic);
 }

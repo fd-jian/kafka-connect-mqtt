@@ -22,5 +22,6 @@ public class MqttSourceConstant {
     public static final String MQTT_USERNAME = "mqtt.user";
     public static final String MQTT_PASSWORD = "mqtt.password";
 
-    public static final String MESSAGE_PROCESSOR = "message_processor_class";
+    public static final String MESSAGE_PROCESSOR = "message_processor.class";
+    public static final String AVRO_SCHEMA_FILE_PATH = "avro.schema.directory";
 }

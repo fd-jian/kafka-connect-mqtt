@@ -5,9 +5,11 @@
 
 package com.evokly.kafka.connect.mqtt;
 
+import com.evokly.kafka.connect.mqtt.sample.AvroProcessor;
 import com.evokly.kafka.connect.mqtt.ssl.SslUtils;
 import com.evokly.kafka.connect.mqtt.util.Version;
 
+import org.apache.avro.Schema;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTask;
 
@@ -22,6 +24,9 @@ import org.eclipse.paho.client.mqttv3.persist.MemoryPersistence;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -41,6 +46,7 @@ public class MqttSourceTask extends SourceTask implements MqttCallback {
     String mMqttClientId;
     BlockingQueue<MqttMessageProcessor> mQueue = new LinkedBlockingQueue<>();
     MqttSourceConnectorConfig mConfig;
+    private Schema mSchema;
 
     /**
      * Get the version of this task. Usually this should be the same as the corresponding
@@ -60,10 +66,32 @@ public class MqttSourceTask extends SourceTask implements MqttCallback {
      */
     @Override
     public void start(Map<String, String> props) {
-        log.info("Start a MqttSourceTask");
-
         mConfig = new MqttSourceConnectorConfig(props);
 
+        log.info("Start a MqttSourceTask");
+
+        // read schema from file if AvroProcessor is used
+        if (props.get(MqttSourceConstant.MESSAGE_PROCESSOR)
+                .equals(AvroProcessor.class.getName())) {
+            try {
+                String avroSchemaFilePath = String.format("%s/%s.avsc",
+                        mConfig.getString(MqttSourceConstant.AVRO_SCHEMA_FILE_PATH
+                                .replaceAll("/$", "")),
+                        mConfig.getString(MqttSourceConstant.KAFKA_TOPIC));
+                File file = new File(avroSchemaFilePath);
+
+                if (file.exists()) {
+                    mSchema = new org.apache.avro.Schema.Parser()
+                            .parse(file);
+                } else {
+                    throw new FileNotFoundException(
+                            String.format("Could not find Schema file %s.",
+                                    avroSchemaFilePath));
+                }
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        }
 
         mMqttClientId = mConfig.getString(MqttSourceConstant.MQTT_CLIENT_ID) != null
                 ? mConfig.getString(MqttSourceConstant.MQTT_CLIENT_ID)
@@ -162,7 +190,6 @@ public class MqttSourceTask extends SourceTask implements MqttCallback {
      * available.
      *
      * @return a list of source records
-     *
      * @throws InterruptedException thread is waiting, sleeping, or otherwise occupied,
      *                              and the thread is interrupted, either before or during the
      *                              activity
@@ -205,7 +232,6 @@ public class MqttSourceTask extends SourceTask implements MqttCallback {
      *
      * @param topic   name of the topic on the message was published to
      * @param message the actual message.
-     *
      * @throws Exception if a terminal error has occurred, and the client should be
      *                   shut down.
      */
@@ -216,7 +242,7 @@ public class MqttSourceTask extends SourceTask implements MqttCallback {
         this.mQueue.add(
                 mConfig.getConfiguredInstance(MqttSourceConstant.MESSAGE_PROCESSOR,
                         MqttMessageProcessor.class)
-                    .process(topic, message)
+                        .process(topic, message, mSchema)
         );
     }
 }

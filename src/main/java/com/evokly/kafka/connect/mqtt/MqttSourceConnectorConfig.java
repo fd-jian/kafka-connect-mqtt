@@ -62,7 +62,10 @@ public class MqttSourceConnectorConfig extends AbstractConfig {
                         "password to authenticate to mqtt broker")
                 .define(MqttSourceConstant.MESSAGE_PROCESSOR, Type.CLASS,
                         DumbProcessor.class, Importance.HIGH,
-                        "message processor to use");
+                        "message processor to use")
+                .define(MqttSourceConstant.AVRO_SCHEMA_FILE_PATH, Type.STRING, "/etc/kafka/avro",
+                        Importance.LOW,
+                        "Path to an avro schema file to be used if using `AvroProcessor`.");
     }
 
     static ConfigDef config = baseConfigDef();

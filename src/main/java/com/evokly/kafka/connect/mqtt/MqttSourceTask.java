@@ -80,9 +80,7 @@ public class MqttSourceTask extends SourceTask implements MqttCallback {
         String sslCert = mConfig.getString(MqttSourceConstant.MQTT_SSL_CERT);
         String sslPrivateKey = mConfig.getString(MqttSourceConstant.MQTT_SSL_PRIV_KEY);
 
-        if (sslCa != null
-                && sslCert != null
-                && sslPrivateKey != null) {
+        if (sslCa != null) {
             try {
                 connectOptions.setSocketFactory(
                         SslUtils.getSslSocketFactory(sslCa, sslCert, sslPrivateKey, "")

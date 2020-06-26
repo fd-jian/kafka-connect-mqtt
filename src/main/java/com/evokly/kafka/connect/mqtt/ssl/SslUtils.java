@@ -11,7 +11,6 @@ import org.bouncycastle.openssl.jcajce.JcaPEMKeyConverter;
 import org.bouncycastle.openssl.jcajce.JcePEMDecryptorProviderBuilder;
 
 import java.io.FileInputStream;
-import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.charset.Charset;
@@ -20,13 +19,18 @@ import java.security.KeyPair;
 import java.security.KeyStore;
 import java.security.KeyStoreException;
 import java.security.NoSuchAlgorithmException;
+import java.security.SecureRandom;
 import java.security.Security;
 import java.security.UnrecoverableKeyException;
 import java.security.cert.CertificateException;
+import java.security.cert.X509Certificate;
+
 import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLSocketFactory;
+import javax.net.ssl.TrustManager;
 import javax.net.ssl.TrustManagerFactory;
+import javax.net.ssl.X509TrustManager;
 
 /**
  * Created by booncol on 07.04.2016.
@@ -38,8 +42,9 @@ public class SslUtils {
         Security.insertProviderAt(new BouncyCastleProvider(), 1);
     }
 
-    /**
-     * Create SSLSocketFactory.
+    private static final boolean DEVELOPMENT = true;
+
+    /** Create SSLSocketFactory.
      *
      * @param caCrt CA certificate filepath
      * @param crt Client certificate filepath
@@ -55,27 +60,38 @@ public class SslUtils {
             throws IOException, KeyStoreException, NoSuchAlgorithmException, CertificateException,
             UnrecoverableKeyException, KeyManagementException {
 
+        SSLContext context = SSLContext.getInstance("TLSv1.2");
+        // TODO: allow all certs during development
+        if (DEVELOPMENT) { 
+            return initDevContext(context);
+        }
+
         char[] passwdChars = password != null && password.length() > 0
                 ? password.toCharArray() : "".toCharArray();
 
-        // load client private key
-        PEMParser parser = new PEMParser(
-                new InputStreamReader(new FileInputStream(key), Charset.forName("UTF-8"))
-        );
+        PEMParser parser = null;
+        KeyPair keyPair = null;
+        if (key != null) {
+            // load client private key
+            parser = new PEMParser(
+                    new InputStreamReader(new FileInputStream(key), Charset.forName("UTF-8"))
+                    );
 
-        Object obj = parser.readObject();
-        KeyPair keyPair;
-        JcaPEMKeyConverter converter = new JcaPEMKeyConverter().setProvider("BC");
+            Object obj = parser.readObject();
+            JcaPEMKeyConverter converter = new JcaPEMKeyConverter().setProvider("BC");
 
-        if (obj instanceof PEMEncryptedKeyPair) {
-            PEMDecryptorProvider decProv = new JcePEMDecryptorProviderBuilder().build(passwdChars);
-            converter = new JcaPEMKeyConverter().setProvider("BC");
-            keyPair = converter.getKeyPair(((PEMEncryptedKeyPair) obj).decryptKeyPair(decProv));
-        } else {
-            keyPair = converter.getKeyPair((PEMKeyPair) obj);
+            if (obj instanceof PEMEncryptedKeyPair) {
+                PEMDecryptorProvider decProv = new JcePEMDecryptorProviderBuilder()
+                        .build(passwdChars);
+                converter = new JcaPEMKeyConverter().setProvider("BC");
+                keyPair = converter.getKeyPair(((PEMEncryptedKeyPair) obj).decryptKeyPair(decProv));
+            } else {
+                keyPair = converter.getKeyPair((PEMKeyPair) obj);
+            }
+
+            parser.close();
         }
 
-        parser.close();
         JcaX509CertificateConverter certConverter = new JcaX509CertificateConverter();
         certConverter.setProvider("BC");
 
@@ -96,30 +112,63 @@ public class SslUtils {
 
         tmf.init(caKs);
 
-        // load client certificate
-        parser = new PEMParser(
-                new InputStreamReader(new FileInputStream(crt), Charset.forName("UTF-8"))
-        );
+        KeyManagerFactory kmf = null;
+        if (crt != null) {
+            // load client certificate
+            parser = new PEMParser(
+                    new InputStreamReader(new FileInputStream(crt), Charset.forName("UTF-8"))
+                    );
 
-        X509CertificateHolder cert = (X509CertificateHolder) parser.readObject();
-        parser.close();
+            X509CertificateHolder cert = (X509CertificateHolder) parser.readObject();
+            parser.close();
 
-        // Client key and certificates are sent to server so it can authenticate
-        // us
-        KeyStore ks = KeyStore.getInstance(KeyStore.getDefaultType());
-        ks.load(null, null);
-        ks.setCertificateEntry("certificate", certConverter.getCertificate(cert));
-        ks.setKeyEntry("private-key", keyPair.getPrivate(), passwdChars,
-                new java.security.cert.Certificate[] { certConverter.getCertificate(cert) });
-        KeyManagerFactory kmf = KeyManagerFactory.getInstance(KeyManagerFactory
-                .getDefaultAlgorithm());
-        kmf.init(ks, passwdChars);
+            // Client key and certificates are sent to server so it can authenticate
+            // us
+            KeyStore ks = KeyStore.getInstance(KeyStore.getDefaultType());
+            ks.load(null, null);
+            ks.setCertificateEntry("certificate", certConverter.getCertificate(cert));
+            ks.setKeyEntry("private-key", keyPair.getPrivate(), passwdChars,
+                    new java.security.cert.Certificate[] { certConverter.getCertificate(cert) });
+            kmf = KeyManagerFactory.getInstance(KeyManagerFactory
+                    .getDefaultAlgorithm());
+            kmf.init(ks, passwdChars);
+        }
 
         // Finally, create SSL socket factory
-        SSLContext context = SSLContext.getInstance("TLSv1.2");
-        context.init(kmf.getKeyManagers(), tmf.getTrustManagers(), null);
+        //
+        context.init(kmf != null ? kmf.getKeyManagers() : null, tmf.getTrustManagers(), null);
 
         return context.getSocketFactory();
+    }
+
+    /** Create SSLSocketFactory for development.
+     *
+     * @param sslContext SSL Context
+     *
+     * @return SSLSocketFactory
+     */
+    public static SSLSocketFactory initDevContext(SSLContext sslContext) 
+            throws KeyManagementException {
+        TrustManager[] trustAllCerts = new TrustManager[] { 
+            new X509TrustManager() {     
+
+                public X509Certificate[] getAcceptedIssuers() { 
+                    return new X509Certificate[0];
+                } 
+
+                public void checkClientTrusted( 
+                        X509Certificate[] certs, String authType) {
+                        } 
+
+                public void checkServerTrusted( 
+                        X509Certificate[] certs, String authType) {
+                        }
+            } 
+
+        };
+        sslContext.init(null, trustAllCerts, new SecureRandom());
+
+        return sslContext.getSocketFactory();
     }
 
 }

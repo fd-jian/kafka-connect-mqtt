@@ -9,6 +9,9 @@ import com.evokly.kafka.connect.mqtt.sample.AvroProcessor;
 import com.evokly.kafka.connect.mqtt.ssl.SslUtils;
 import com.evokly.kafka.connect.mqtt.util.Version;
 
+import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
+import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
+import io.confluent.kafka.serializers.KafkaAvroSerializerConfig;
 import org.apache.avro.Schema;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTask;
@@ -70,27 +73,27 @@ public class MqttSourceTask extends SourceTask implements MqttCallback {
 
         log.info("Start a MqttSourceTask");
 
-        // read schema from file if AvroProcessor is used
+        // load schema from registry
         if (props.get(MqttSourceConstant.MESSAGE_PROCESSOR)
                 .equals(AvroProcessor.class.getName())) {
+            CachedSchemaRegistryClient s = new CachedSchemaRegistryClient(
+                    mConfig.getString(MqttSourceConstant.AVRO_SCHEMA_REGISTRY_URL),
+                    100);
+            String subject = String.format("%s-value", mConfig.getString(MqttSourceConstant.KAFKA_TOPIC));
             try {
-                String avroSchemaFilePath = String.format("%s/%s.avsc",
-                        mConfig.getString(MqttSourceConstant.AVRO_SCHEMA_FILE_PATH
-                                .replaceAll("/$", "")),
-                        mConfig.getString(MqttSourceConstant.KAFKA_TOPIC));
-                File file = new File(avroSchemaFilePath);
-
-                if (file.exists()) {
-                    mSchema = new org.apache.avro.Schema.Parser()
-                            .parse(file);
-                } else {
-                    throw new FileNotFoundException(
-                            String.format("Could not find Schema file %s.",
-                                    avroSchemaFilePath));
-                }
-            } catch (IOException e) {
+                mSchema = new org.apache.avro.Schema.Parser()
+                        .parse(s.getByVersion(
+                        subject,
+                        s.getAllVersions(subject)
+                                .stream()
+                                .mapToInt(value -> value)
+                                .max().orElseThrow(() -> new RuntimeException("schema not found")), false)
+                                .getSchema());
+                ;
+            } catch (IOException | RestClientException e) {
                 throw new RuntimeException(e);
             }
+
         }
 
         mMqttClientId = mConfig.getString(MqttSourceConstant.MQTT_CLIENT_ID) != null

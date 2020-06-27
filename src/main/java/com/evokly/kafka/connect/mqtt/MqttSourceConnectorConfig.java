@@ -63,9 +63,9 @@ public class MqttSourceConnectorConfig extends AbstractConfig {
                 .define(MqttSourceConstant.MESSAGE_PROCESSOR, Type.CLASS,
                         DumbProcessor.class, Importance.HIGH,
                         "message processor to use")
-                .define(MqttSourceConstant.AVRO_SCHEMA_FILE_PATH, Type.STRING, "/etc/kafka/avro",
+                .define(MqttSourceConstant.AVRO_SCHEMA_REGISTRY_URL, Type.STRING, "http://schema-registry:8081",
                         Importance.LOW,
-                        "Path to an avro schema file to be used if using `AvroProcessor`.");
+                        "URL to a schema registry to be used if using `AvroProcessor`.");
     }
 
     static ConfigDef config = baseConfigDef();

@@ -6,11 +6,12 @@ USER root
 #RUN gradle build -x test -x findBugsMain && \
 RUN gradle build -x test && \
     gradle copyRuntimeLibs && \
-    cp /project/build/output/lib/*.jar /project/build/libs
-    #cp /project/build/output/lib/bcpg*.jar /project/build/libs && \
-    #cp /project/build/output/lib/bcprov*.jar /project/build/libs && \
-    #cp /project/build/output/lib/bcpkix*.jar /project/build/libs && \
-    #cp /project/build/output/lib/org.eclipse.paho.client.mqttv*.jar /project/build/libs
+    cp /project/build/output/lib/*.jar /project/build/libs && \
+    mv /project/build/libs /project/entrypoint.sh /tmp && \
+    rm -rf /project && \
+    mkdir -p /project/build && \
+    mv /tmp/libs /project/build &&\
+    mv /tmp/entrypoint.sh /project
 
 VOLUME /jars
 

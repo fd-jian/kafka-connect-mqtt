@@ -8,21 +8,13 @@ package com.evokly.kafka.connect.mqtt;
 import com.evokly.kafka.connect.mqtt.sample.AvroProcessor;
 import com.evokly.kafka.connect.mqtt.ssl.SslUtils;
 import com.evokly.kafka.connect.mqtt.util.Version;
-
 import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import org.apache.avro.Schema;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTask;
-
-import org.eclipse.paho.client.mqttv3.IMqttDeliveryToken;
-import org.eclipse.paho.client.mqttv3.MqttCallback;
-import org.eclipse.paho.client.mqttv3.MqttClient;
-import org.eclipse.paho.client.mqttv3.MqttConnectOptions;
-import org.eclipse.paho.client.mqttv3.MqttException;
-import org.eclipse.paho.client.mqttv3.MqttMessage;
+import org.eclipse.paho.client.mqttv3.*;
 import org.eclipse.paho.client.mqttv3.persist.MemoryPersistence;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -73,12 +65,12 @@ public class MqttSourceTask extends SourceTask implements MqttCallback {
         if (props.get(MqttSourceConstant.MESSAGE_PROCESSOR)
                 .equals(AvroProcessor.class.getName())) {
 
-            CachedSchemaRegistryClient s = new CachedSchemaRegistryClient(
+            CachedSchemaRegistryClient sclient = new CachedSchemaRegistryClient(
                     mConfig.getString(MqttSourceConstant.AVRO_SCHEMA_REGISTRY_URL),
                     100);
 
-            mValueSchema = getSchema(s, String.format("%s-value", kafkaTopic), true);
-            mKeySchema = getSchema(s, String.format("%s-key", kafkaTopic), false);
+            mValueSchema = getSchema(sclient, String.format("%sclient-value", kafkaTopic), true);
+            mKeySchema = getSchema(sclient, String.format("%sclient-key", kafkaTopic), false);
         }
 
         mMqttClientId = mConfig.getString(MqttSourceConstant.MQTT_CLIENT_ID) != null
@@ -157,23 +149,25 @@ public class MqttSourceTask extends SourceTask implements MqttCallback {
         }
     }
 
-    private Schema getSchema(CachedSchemaRegistryClient s, String subject, boolean failOnEmpty) {
+    private Schema getSchema(CachedSchemaRegistryClient sClient,
+                             String subject,
+                             boolean failOnEmpty) {
         Schema schema;
         try {
-            OptionalInt max = s.getAllVersions(subject)
+            OptionalInt max = sClient.getAllVersions(subject)
                     .stream()
                     .mapToInt(value -> value)
                     .max();
 
-            if (max.isEmpty()) {
-                if(failOnEmpty) {
-                   throw new RuntimeException("schema not found");
+            if (!max.isPresent()) {
+                if (failOnEmpty) {
+                    throw new RuntimeException("schema not found");
                 }
                 return null;
             }
 
             schema = new Schema.Parser()
-                    .parse(s.getByVersion(subject, max.getAsInt(), false)
+                    .parse(sClient.getByVersion(subject, max.getAsInt(), false)
                             .getSchema());
             ;
         } catch (IOException | RestClientException e) {

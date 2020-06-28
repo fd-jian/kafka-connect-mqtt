@@ -65,12 +65,12 @@ public class MqttSourceTask extends SourceTask implements MqttCallback {
         if (props.get(MqttSourceConstant.MESSAGE_PROCESSOR)
                 .equals(AvroProcessor.class.getName())) {
 
-            CachedSchemaRegistryClient sclient = new CachedSchemaRegistryClient(
+            CachedSchemaRegistryClient sClient = new CachedSchemaRegistryClient(
                     mConfig.getString(MqttSourceConstant.AVRO_SCHEMA_REGISTRY_URL),
                     100);
 
-            mValueSchema = getSchema(sclient, String.format("%sclient-value", kafkaTopic), true);
-            mKeySchema = getSchema(sclient, String.format("%sclient-key", kafkaTopic), false);
+            mValueSchema = getSchema(sClient, String.format("%s-value", kafkaTopic), true);
+            mKeySchema = getSchema(sClient, String.format("%s-key", kafkaTopic), false);
         }
 
         mMqttClientId = mConfig.getString(MqttSourceConstant.MQTT_CLIENT_ID) != null
@@ -151,7 +151,7 @@ public class MqttSourceTask extends SourceTask implements MqttCallback {
 
     private Schema getSchema(CachedSchemaRegistryClient sClient,
                              String subject,
-                             boolean failOnEmpty) {
+                             boolean isValue) {
         Schema schema;
         try {
             OptionalInt max = sClient.getAllVersions(subject)
@@ -160,7 +160,7 @@ public class MqttSourceTask extends SourceTask implements MqttCallback {
                     .max();
 
             if (!max.isPresent()) {
-                if (failOnEmpty) {
+                if (isValue) {
                     throw new RuntimeException("schema not found");
                 }
                 return null;
@@ -169,6 +169,15 @@ public class MqttSourceTask extends SourceTask implements MqttCallback {
             schema = new Schema.Parser()
                     .parse(sClient.getByVersion(subject, max.getAsInt(), false)
                             .getSchema());
+
+            if(!isValue) {
+                List<org.apache.avro.Schema.Field> fields = schema.getFields();
+                if (fields.size() != 1 ||
+                        !(fields.get(0)).schema().getType()
+                                .equals(org.apache.avro.Schema.Type.STRING)) {
+                    throw new RuntimeException("Key schema must have exactly 1 field with string schema.");
+                }
+            }
             ;
         } catch (IOException | RestClientException e) {
             throw new RuntimeException(e);

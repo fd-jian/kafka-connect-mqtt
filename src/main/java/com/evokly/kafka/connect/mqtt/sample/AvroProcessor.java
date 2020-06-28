@@ -3,6 +3,7 @@ package com.evokly.kafka.connect.mqtt.sample;
 import com.evokly.kafka.connect.mqtt.MqttMessageProcessor;
 import io.confluent.connect.avro.AvroData;
 import io.confluent.connect.avro.AvroDataConfig;
+import org.apache.avro.SchemaBuilder;
 import org.apache.avro.generic.GenericDatumReader;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.GenericRecordBuilder;
@@ -68,18 +69,11 @@ public class AvroProcessor implements MqttMessageProcessor {
         this.mValueSchemaAndValue = avroData.toConnectData(valueSchema, rec);
 
         if (keySchema != null) {
-            List<org.apache.avro.Schema.Field> fields = keySchema.getFields();
-            org.apache.avro.Schema.Field firstField;
-            if (fields.size() != 1 ||
-                    !(firstField = fields.get(0)).schema().getType()
-                            .equals(org.apache.avro.Schema.Type.STRING)) {
-                throw new RuntimeException("Key schema must have exactly 1 field with string schema.");
-            }
 
             this.mKeySchemaAndValue = avroData.toConnectData(
                     keySchema,
                     new GenericRecordBuilder(keySchema)
-                            .set(firstField, mTopic).build());
+                            .set(keySchema.getFields().get(0), mTopic).build());
         }
 
         return this;
@@ -89,6 +83,7 @@ public class AvroProcessor implements MqttMessageProcessor {
     public SourceRecord[] getRecords(String kafkaTopic) {
         return new SourceRecord[]{
                 new SourceRecord(null, null, kafkaTopic, null,
+                        // TODO: use avro string for key if key schema is not available
                         Optional.ofNullable(mKeySchemaAndValue)
                                 .map(SchemaAndValue::schema)
                                 .orElse(Schema.STRING_SCHEMA),

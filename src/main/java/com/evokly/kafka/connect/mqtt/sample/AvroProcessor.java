@@ -5,6 +5,7 @@ import io.confluent.connect.avro.AvroData;
 import io.confluent.connect.avro.AvroDataConfig;
 import org.apache.avro.generic.GenericDatumReader;
 import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.GenericRecordBuilder;
 import org.apache.avro.io.Decoder;
 import org.apache.avro.io.DecoderFactory;
 import org.apache.kafka.connect.data.Schema;
@@ -16,6 +17,8 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
+import java.util.Optional;
 
 
 /**
@@ -26,30 +29,31 @@ import java.nio.charset.StandardCharsets;
 public class AvroProcessor implements MqttMessageProcessor {
     private static final Logger log = LoggerFactory.getLogger(AvroProcessor.class);
     private MqttMessage mMessage;
-    private Object mTopic;
-    private org.apache.avro.Schema mSchema;
-    private SchemaAndValue mSchemaAndValue;
+    private String mTopic;
+    private SchemaAndValue mValueSchemaAndValue;
+    private SchemaAndValue mKeySchemaAndValue;
 
     @Override
     public MqttMessageProcessor process(String topic, MqttMessage message,
-                                        org.apache.avro.Schema valueSchema) {
+                                        org.apache.avro.Schema valueSchema, org.apache.avro.Schema keySchema) {
         log.debug("processing data for topic: {}; with message {}", topic, message);
         this.mTopic = topic;
         this.mMessage = message;
-        this.mSchema = valueSchema;
 
         //  Struct st = new Struct(schema);
         DecoderFactory df = DecoderFactory.get();
         String payloadString = new String(mMessage.getPayload(), StandardCharsets.UTF_8);
+
         Decoder dec;
+
         try {
-            dec = df.jsonDecoder(mSchema, payloadString);
+            dec = df.jsonDecoder(valueSchema, payloadString);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
 
         GenericDatumReader<GenericRecord> reader =
-                new GenericDatumReader<>(mSchema);
+                new GenericDatumReader<>(valueSchema);
 
         GenericRecord rec;
         try {
@@ -59,17 +63,39 @@ public class AvroProcessor implements MqttMessageProcessor {
         }
 
         AvroData avroData = new AvroData(new AvroDataConfig.Builder().build());
-        mSchemaAndValue = avroData
-                .toConnectData(mSchema, rec);
+
+        this.mValueSchemaAndValue = avroData.toConnectData(valueSchema, rec);
+
+        if (keySchema != null) {
+            List<org.apache.avro.Schema.Field> fields = keySchema.getFields();
+            org.apache.avro.Schema.Field firstField;
+            if (fields.size() != 1 ||
+                    !(firstField = fields.get(0)).schema().getType()
+                            .equals(org.apache.avro.Schema.Type.STRING)) {
+                throw new RuntimeException("Key schema must have exactly 1 field with string schema.");
+            }
+
+            this.mKeySchemaAndValue = avroData.toConnectData(
+                    keySchema,
+                    new GenericRecordBuilder(keySchema)
+                            .set(firstField, mTopic).build());
+        }
 
         return this;
     }
 
     @Override
     public SourceRecord[] getRecords(String kafkaTopic) {
-
-        return new SourceRecord[]{new SourceRecord(null, null, kafkaTopic, null,
-                Schema.STRING_SCHEMA, mTopic,
-                mSchemaAndValue.schema(), mSchemaAndValue.value())};
+        return new SourceRecord[]{
+                new SourceRecord(null, null, kafkaTopic, null,
+                        Optional.ofNullable(mKeySchemaAndValue)
+                                .map(SchemaAndValue::schema)
+                                .orElse(Schema.STRING_SCHEMA),
+                        Optional.ofNullable(mKeySchemaAndValue)
+                                .map(SchemaAndValue::value)
+                                .orElse(mTopic),
+                        mValueSchemaAndValue.schema(),
+                        mValueSchemaAndValue.value())
+        };
     }
 }

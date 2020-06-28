@@ -11,7 +11,7 @@ import org.eclipse.paho.client.mqttv3.MqttMessage;
  **/
 public interface MqttMessageProcessor {
 
-    MqttMessageProcessor process(String topic, MqttMessage message, Schema valueSchema);
+    MqttMessageProcessor process(String topic, MqttMessage message, Schema valueSchema, Schema mKeySchema);
 
     SourceRecord[] getRecords(String kafkaTopic);
 }

@@ -3,10 +3,7 @@ package com.evokly.kafka.connect.mqtt.sample;
 import com.evokly.kafka.connect.mqtt.MqttMessageProcessor;
 import io.confluent.connect.avro.AvroData;
 import io.confluent.connect.avro.AvroDataConfig;
-import org.apache.avro.SchemaBuilder;
 import org.apache.avro.generic.GenericDatumReader;
-import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.generic.GenericRecordBuilder;
 import org.apache.avro.io.Decoder;
 import org.apache.avro.io.DecoderFactory;
 import org.apache.kafka.connect.data.Schema;
@@ -18,8 +15,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
 
 
 /**
@@ -33,57 +29,70 @@ public class AvroProcessor implements MqttMessageProcessor {
     private String mTopic;
     private SchemaAndValue mValueSchemaAndValue;
     private SchemaAndValue mKeySchemaAndValue;
+    private AvroData avroData = new AvroData(new AvroDataConfig.Builder().build());
+    private DecoderFactory decoderFactory = DecoderFactory.get();
+    private Decoder decoder;
+    private Object genericDatum;
 
     @Override
-    public MqttMessageProcessor process(String topic, MqttMessage message,
+    public MqttMessageProcessor process(String topic,
+                                        MqttMessage message,
+                                        int mqttTopicOffset,
                                         org.apache.avro.Schema valueSchema,
                                         org.apache.avro.Schema keySchema) {
         log.debug("processing data for topic: {}; with message {}", topic, message);
-        this.mTopic = topic;
+
+        this.mTopic = Optional.of(topic)
+                .map(s -> s.split("/"))
+                .map(s -> s[s.length - mqttTopicOffset - 1])
+                .get();
+
         this.mMessage = message;
 
         //  Struct st = new Struct(schema);
-        DecoderFactory df = DecoderFactory.get();
         String payloadString = new String(mMessage.getPayload(), StandardCharsets.UTF_8);
 
-        Decoder dec;
 
-        try {
-            dec = df.jsonDecoder(valueSchema, payloadString);
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
+        this.mValueSchemaAndValue = getSchemaAndValue(valueSchema, payloadString, true);
 
-        GenericDatumReader<GenericRecord> reader =
-                new GenericDatumReader<>(valueSchema);
-
-        GenericRecord rec;
-        try {
-            rec = reader.read(null, dec);
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
-
-        AvroData avroData = new AvroData(new AvroDataConfig.Builder().build());
-
-        this.mValueSchemaAndValue = avroData.toConnectData(valueSchema, rec);
-
-        if (keySchema != null) {
-
-            this.mKeySchemaAndValue = avroData.toConnectData(
-                    keySchema,
-                    new GenericRecordBuilder(keySchema)
-                            .set(keySchema.getFields().get(0), mTopic).build());
-        }
+        this.mKeySchemaAndValue = Optional.ofNullable(keySchema)
+                .map(schema -> getSchemaAndValue(schema, mTopic, false))
+                .orElse(null);
 
         return this;
+    }
+
+    private SchemaAndValue getSchemaAndValue(org.apache.avro.Schema schema, String value, boolean isValue) {
+        try {
+            decoder = decoderFactory.jsonDecoder(schema, !isValue && new HashSet<>(
+                    Arrays.asList(
+                            org.apache.avro.Schema.Type.STRING,
+                            org.apache.avro.Schema.Type.BYTES,
+                            org.apache.avro.Schema.Type.ENUM,
+                            org.apache.avro.Schema.Type.FIXED))
+                    .contains(schema.getType())
+                    ? String.format("\"%s\"", value)
+                    : value);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+
+        GenericDatumReader<Object> reader =
+                new GenericDatumReader<>(schema);
+
+        try {
+            genericDatum = reader.read(null, decoder);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+
+        return avroData.toConnectData(schema, genericDatum);
     }
 
     @Override
     public SourceRecord[] getRecords(String kafkaTopic) {
         return new SourceRecord[]{
                 new SourceRecord(null, null, kafkaTopic, null,
-                        // TODO: use avro string for key if key schema is not available
                         Optional.ofNullable(mKeySchemaAndValue)
                                 .map(SchemaAndValue::schema)
                                 .orElse(Schema.STRING_SCHEMA),

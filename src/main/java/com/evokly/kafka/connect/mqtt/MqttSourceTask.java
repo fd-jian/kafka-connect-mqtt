@@ -66,11 +66,11 @@ public class MqttSourceTask extends SourceTask implements MqttCallback {
                 .equals(AvroProcessor.class.getName())) {
 
             CachedSchemaRegistryClient sClient = new CachedSchemaRegistryClient(
-                    mConfig.getString(MqttSourceConstant.AVRO_SCHEMA_REGISTRY_URL),
+                    mConfig.getString(MqttSourceConstant.SCHEMA_REGISTRY_URL),
                     100);
 
-            mValueSchema = getSchema(sClient, String.format("%s-value", kafkaTopic), true);
-            mKeySchema = getSchema(sClient, String.format("%s-key", kafkaTopic), false);
+            mValueSchema = getSchema(sClient, String.format("mqtt-%s-value", kafkaTopic), true);
+            mKeySchema = getSchema(sClient, String.format("mqtt-%s-key", kafkaTopic), false);
         }
 
         mMqttClientId = mConfig.getString(MqttSourceConstant.MQTT_CLIENT_ID) != null
@@ -161,7 +161,7 @@ public class MqttSourceTask extends SourceTask implements MqttCallback {
 
             if (!max.isPresent()) {
                 if (isValue) {
-                    throw new RuntimeException("schema not found");
+                    throw new RuntimeException(String.format("Schema not found for subject %s", subject));
                 }
                 return null;
             }
@@ -169,17 +169,13 @@ public class MqttSourceTask extends SourceTask implements MqttCallback {
             schema = new Schema.Parser()
                     .parse(sClient.getByVersion(subject, max.getAsInt(), false)
                             .getSchema());
-
-            if(!isValue) {
-                List<org.apache.avro.Schema.Field> fields = schema.getFields();
-                if (fields.size() != 1 ||
-                        !(fields.get(0)).schema().getType()
-                                .equals(org.apache.avro.Schema.Type.STRING)) {
-                    throw new RuntimeException("Key schema must have exactly 1 field with string schema.");
-                }
-            }
             ;
-        } catch (IOException | RestClientException e) {
+        } catch (RestClientException e) {
+            if (e.getStatus() != 404 || isValue) {
+                throw new RuntimeException(e);
+            }
+            return null;
+        } catch (IOException e) {
             throw new RuntimeException(e);
         }
         return schema;
@@ -258,7 +254,7 @@ public class MqttSourceTask extends SourceTask implements MqttCallback {
         this.mQueue.add(
                 mConfig.getConfiguredInstance(MqttSourceConstant.MESSAGE_PROCESSOR,
                         MqttMessageProcessor.class)
-                        .process(topic, message, mValueSchema, mKeySchema)
+                        .process(topic, message, mConfig.getInt(MqttSourceConstant.TOPIC_NAME_OFFSET), mValueSchema, mKeySchema)
         );
     }
 }

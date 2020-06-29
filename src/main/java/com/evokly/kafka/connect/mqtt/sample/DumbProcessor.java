@@ -19,7 +19,9 @@ public class DumbProcessor implements MqttMessageProcessor {
     private String mTopic;
 
     @Override
-    public MqttMessageProcessor process(String topic, MqttMessage message,
+    public MqttMessageProcessor process(String topic,
+                                        MqttMessage message,
+                                        int offset,
                                         org.apache.avro.Schema valueSchema, org.apache.avro.Schema keySchema) {
         log.debug("processing data for topic: {}; with message {}", topic, message);
         this.mTopic = topic;

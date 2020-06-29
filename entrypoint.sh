@@ -1,6 +1,5 @@
 #!/bin/sh
 
-echo running entrypoint
 echo copying jar files &&
     mkdir -p /jars &&
     cp /project/build/libs/*.jar /jars &&

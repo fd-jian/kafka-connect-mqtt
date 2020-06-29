@@ -8,32 +8,18 @@ package com.evokly.kafka.connect.mqtt;
 import com.evokly.kafka.connect.mqtt.sample.AvroProcessor;
 import com.evokly.kafka.connect.mqtt.ssl.SslUtils;
 import com.evokly.kafka.connect.mqtt.util.Version;
-
 import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
-import io.confluent.kafka.serializers.KafkaAvroSerializerConfig;
 import org.apache.avro.Schema;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTask;
-
-import org.eclipse.paho.client.mqttv3.IMqttDeliveryToken;
-import org.eclipse.paho.client.mqttv3.MqttCallback;
-import org.eclipse.paho.client.mqttv3.MqttClient;
-import org.eclipse.paho.client.mqttv3.MqttConnectOptions;
-import org.eclipse.paho.client.mqttv3.MqttException;
-import org.eclipse.paho.client.mqttv3.MqttMessage;
+import org.eclipse.paho.client.mqttv3.*;
 import org.eclipse.paho.client.mqttv3.persist.MemoryPersistence;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.File;
-import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 
@@ -49,7 +35,8 @@ public class MqttSourceTask extends SourceTask implements MqttCallback {
     String mMqttClientId;
     BlockingQueue<MqttMessageProcessor> mQueue = new LinkedBlockingQueue<>();
     MqttSourceConnectorConfig mConfig;
-    private Schema mSchema;
+    private Schema mValueSchema;
+    private Schema mKeySchema;
 
     /**
      * Get the version of this task. Usually this should be the same as the corresponding
@@ -74,26 +61,16 @@ public class MqttSourceTask extends SourceTask implements MqttCallback {
         log.info("Start a MqttSourceTask");
 
         // load schema from registry
+        String kafkaTopic = mConfig.getString(MqttSourceConstant.KAFKA_TOPIC);
         if (props.get(MqttSourceConstant.MESSAGE_PROCESSOR)
                 .equals(AvroProcessor.class.getName())) {
-            CachedSchemaRegistryClient s = new CachedSchemaRegistryClient(
-                    mConfig.getString(MqttSourceConstant.AVRO_SCHEMA_REGISTRY_URL),
-                    100);
-            String subject = String.format("%s-value", mConfig.getString(MqttSourceConstant.KAFKA_TOPIC));
-            try {
-                mSchema = new org.apache.avro.Schema.Parser()
-                        .parse(s.getByVersion(
-                        subject,
-                        s.getAllVersions(subject)
-                                .stream()
-                                .mapToInt(value -> value)
-                                .max().orElseThrow(() -> new RuntimeException("schema not found")), false)
-                                .getSchema());
-                ;
-            } catch (IOException | RestClientException e) {
-                throw new RuntimeException(e);
-            }
 
+            CachedSchemaRegistryClient sClient = new CachedSchemaRegistryClient(
+                    mConfig.getString(MqttSourceConstant.SCHEMA_REGISTRY_URL),
+                    100);
+
+            mValueSchema = getSchema(sClient, String.format("mqtt-%s-value", kafkaTopic), true);
+            mKeySchema = getSchema(sClient, String.format("mqtt-%s-key", kafkaTopic), false);
         }
 
         mMqttClientId = mConfig.getString(MqttSourceConstant.MQTT_CLIENT_ID) != null
@@ -101,7 +78,7 @@ public class MqttSourceTask extends SourceTask implements MqttCallback {
                 : MqttClient.generateClientId();
 
         // Setup Kafka
-        mKafkaTopic = mConfig.getString(MqttSourceConstant.KAFKA_TOPIC);
+        mKafkaTopic = kafkaTopic;
 
 
         // Setup MQTT Connect Options
@@ -170,6 +147,38 @@ public class MqttSourceTask extends SourceTask implements MqttCallback {
         } catch (MqttException e) {
             log.error("[{}] Subscribe failed! ", mMqttClientId, e);
         }
+    }
+
+    private Schema getSchema(CachedSchemaRegistryClient sClient,
+                             String subject,
+                             boolean isValue) {
+        Schema schema;
+        try {
+            OptionalInt max = sClient.getAllVersions(subject)
+                    .stream()
+                    .mapToInt(value -> value)
+                    .max();
+
+            if (!max.isPresent()) {
+                if (isValue) {
+                    throw new RuntimeException(String.format("Schema not found for subject %s", subject));
+                }
+                return null;
+            }
+
+            schema = new Schema.Parser()
+                    .parse(sClient.getByVersion(subject, max.getAsInt(), false)
+                            .getSchema());
+            ;
+        } catch (RestClientException e) {
+            if (e.getStatus() != 404 || isValue) {
+                throw new RuntimeException(e);
+            }
+            return null;
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+        return schema;
     }
 
     /**
@@ -245,7 +254,7 @@ public class MqttSourceTask extends SourceTask implements MqttCallback {
         this.mQueue.add(
                 mConfig.getConfiguredInstance(MqttSourceConstant.MESSAGE_PROCESSOR,
                         MqttMessageProcessor.class)
-                        .process(topic, message, mSchema)
+                        .process(topic, message, mConfig.getInt(MqttSourceConstant.TOPIC_NAME_OFFSET), mValueSchema, mKeySchema)
         );
     }
 }

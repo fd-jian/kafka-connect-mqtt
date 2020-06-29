@@ -63,9 +63,12 @@ public class MqttSourceConnectorConfig extends AbstractConfig {
                 .define(MqttSourceConstant.MESSAGE_PROCESSOR, Type.CLASS,
                         DumbProcessor.class, Importance.HIGH,
                         "message processor to use")
-                .define(MqttSourceConstant.AVRO_SCHEMA_REGISTRY_URL, Type.STRING, "http://schema-registry:8081",
+                .define(MqttSourceConstant.SCHEMA_REGISTRY_URL, Type.STRING,
+                        System.getenv("CONNECT_VALUE_CONVERTER_SCHEMA_REGISTRY_URL"),
                         Importance.LOW,
-                        "URL to a schema registry to be used if using `AvroProcessor`.");
+                        "URL to a schema registry to be used if using `AvroProcessor`")
+                .define(MqttSourceConstant.TOPIC_NAME_OFFSET, Type.INT,0, Importance.LOW,
+                "last mqtt subtopic (after the last '/') minus offset value to the left will be used for kafka key.");
     }
 
     static ConfigDef config = baseConfigDef();

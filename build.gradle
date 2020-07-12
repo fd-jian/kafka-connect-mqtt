@@ -44,7 +44,7 @@ dependencies {
 
     compile "org.apache.kafka:connect-api:$kafkaVersion"
     compile 'io.confluent:kafka-connect-avro-data:5.5.0'
-    compile 'org.eclipse.paho:org.eclipse.paho.client.mqttv3:1.0.2'
+    compile 'org.eclipse.paho:org.eclipse.paho.client.mqttv3:1.2.4'
     compile 'org.bouncycastle:bcprov-jdk15on:1.54'
     compile 'org.bouncycastle:bcpkix-jdk15on:1.54'
     compile 'org.bouncycastle:bcpg-jdk15on:1.54'

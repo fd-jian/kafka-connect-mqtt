@@ -30,7 +30,7 @@ public class MqttSourceConnectorConfig extends AbstractConfig {
      */
     public static ConfigDef baseConfigDef() {
         return new ConfigDef()
-                .define(MqttSourceConstant.KAFKA_TOPIC, Type.STRING, "mqtt", Importance.LOW,
+                .define(MqttSourceConstant.KAFKA_TOPIC, Type.STRING, null, Importance.LOW,
                         "Kafka topic to put received data \n Depends on message processor")
                 .define(MqttSourceConstant.MQTT_CLIENT_ID, Type.STRING, null, Importance.MEDIUM,
                         "mqtt client id to use don't set to use random")
@@ -67,8 +67,12 @@ public class MqttSourceConnectorConfig extends AbstractConfig {
                         System.getenv("CONNECT_VALUE_CONVERTER_SCHEMA_REGISTRY_URL"),
                         Importance.LOW,
                         "URL to a schema registry to be used if using `AvroProcessor`")
-                .define(MqttSourceConstant.TOPIC_NAME_OFFSET, Type.INT,0, Importance.LOW,
-                "last mqtt subtopic (after the last '/') minus offset value to the left will be used for kafka key.");
+                .define(MqttSourceConstant.KAFKA_KEY_OFFSET, Type.INT,0, Importance.LOW,
+                "last mqtt subtopic (after the last '/') minus offset value to the left will be used for kafka key.")
+                .define(MqttSourceConstant.KAFKA_SCHEMA_SUBJECT, Type.STRING,"", Importance.LOW,
+                        "Name of the subject in the schema registry if avro processor is used.")
+                .define(MqttSourceConstant.KAFKA_TOPIC_OFFSET, Type.INT,1, Importance.LOW,
+                "mqtt parent topic (before the first '/' plus offset value to the right will be used for kafka topic.");
     }
 
     static ConfigDef config = baseConfigDef();

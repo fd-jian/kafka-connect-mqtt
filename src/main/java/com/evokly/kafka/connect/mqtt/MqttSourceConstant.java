@@ -23,6 +23,8 @@ public class MqttSourceConstant {
     public static final String MQTT_PASSWORD = "mqtt.password";
 
     public static final String MESSAGE_PROCESSOR = "processing.message_processor";
-    public static final String TOPIC_NAME_OFFSET = "processing.topic_name_offset";
+    public static final String KAFKA_KEY_OFFSET = "processing.kafka_key_offset";
+    public static final String KAFKA_TOPIC_OFFSET = "processing.kafka_topic_offset";
+    public static final String KAFKA_SCHEMA_SUBJECT = "processing.kafka_schema_subject";
     public static final String SCHEMA_REGISTRY_URL = "processing.schema_registry_url";
 }

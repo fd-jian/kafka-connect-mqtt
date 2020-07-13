@@ -62,6 +62,7 @@ public class MqttSourceTask extends SourceTask implements MqttCallback {
 
         // load schema from registry
         String kafkaTopic = mConfig.getString(MqttSourceConstant.KAFKA_TOPIC);
+        log.info("kafka topic is : {}", kafkaTopic);
         if (props.get(MqttSourceConstant.MESSAGE_PROCESSOR)
                 .equals(AvroProcessor.class.getName())) {
 
@@ -69,8 +70,15 @@ public class MqttSourceTask extends SourceTask implements MqttCallback {
                     mConfig.getString(MqttSourceConstant.SCHEMA_REGISTRY_URL),
                     100);
 
-            mValueSchema = getSchema(sClient, String.format("mqtt-%s-value", kafkaTopic), true);
-            mKeySchema = getSchema(sClient, String.format("mqtt-%s-key", kafkaTopic), false);
+            String subject = kafkaTopic != null ? kafkaTopic :
+                    (mConfig.getString(MqttSourceConstant.KAFKA_SCHEMA_SUBJECT));
+
+            if(!subject.equals("")) {
+                subject = "-" + subject;
+            }
+
+            mValueSchema = getSchema(sClient, String.format("mqtt%s-value", subject), true);
+            mKeySchema = getSchema(sClient, String.format("mqtt%s-key", subject), false);
         }
 
         mMqttClientId = mConfig.getString(MqttSourceConstant.MQTT_CLIENT_ID) != null
@@ -120,6 +128,8 @@ public class MqttSourceTask extends SourceTask implements MqttCallback {
             connectOptions.setPassword(
                     mConfig.getString(MqttSourceConstant.MQTT_PASSWORD).toCharArray());
         }
+
+        connectOptions.setAutomaticReconnect(true);
 
         // Connect to Broker
         try {
@@ -181,6 +191,8 @@ public class MqttSourceTask extends SourceTask implements MqttCallback {
         return schema;
     }
 
+
+
     /**
      * Stop this task.
      */
@@ -210,10 +222,10 @@ public class MqttSourceTask extends SourceTask implements MqttCallback {
     public List<SourceRecord> poll() throws InterruptedException {
         List<SourceRecord> records = new ArrayList<>();
         MqttMessageProcessor message = mQueue.take();
-        log.debug("[{}] Polling new data from queue for '{}' topic.",
-                mMqttClientId, mKafkaTopic);
+        log.debug("[{}] Polling new data from queue.",
+                mMqttClientId);
 
-        Collections.addAll(records, message.getRecords(mKafkaTopic));
+        Collections.addAll(records, message.getRecords());
 
         return records;
     }
@@ -239,6 +251,8 @@ public class MqttSourceTask extends SourceTask implements MqttCallback {
         // Nothing to implement.
     }
 
+
+
     /**
      * This method is called when a message arrives from the server.
      *
@@ -251,10 +265,19 @@ public class MqttSourceTask extends SourceTask implements MqttCallback {
     public void messageArrived(String topic, MqttMessage message) throws Exception {
         log.debug("[{}] New message on '{}' arrived.", mMqttClientId, topic);
 
+        String kfkTopic = mKafkaTopic != null ? mKafkaTopic :
+                topic.split("/")
+                    [mConfig.getInt(MqttSourceConstant.KAFKA_TOPIC_OFFSET)];
+
+        String kfkKey = Optional.of(topic.split("/"))
+                .map(s -> s[s.length - mConfig.getInt(MqttSourceConstant.KAFKA_KEY_OFFSET) - 1])
+                .orElse(null);
+        log.info("kfktopic: {}, kfkkey: {}", kfkTopic, kfkKey);
+
         this.mQueue.add(
                 mConfig.getConfiguredInstance(MqttSourceConstant.MESSAGE_PROCESSOR,
                         MqttMessageProcessor.class)
-                        .process(topic, message, mConfig.getInt(MqttSourceConstant.TOPIC_NAME_OFFSET), mValueSchema, mKeySchema)
+                        .process(message, kfkTopic, kfkKey, mValueSchema, mKeySchema)
         );
     }
 }

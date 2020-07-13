@@ -16,23 +16,22 @@ import org.slf4j.LoggerFactory;
 public class DumbProcessor implements MqttMessageProcessor {
     private static final Logger log = LoggerFactory.getLogger(DumbProcessor.class);
     private MqttMessage mMessage;
-    private String mTopic;
+    private String mKafkaKey;
+    private String mKafkaTopic;
 
     @Override
-    public MqttMessageProcessor process(String topic,
-                                        MqttMessage message,
-                                        int offset,
-                                        org.apache.avro.Schema valueSchema, org.apache.avro.Schema keySchema) {
-        log.debug("processing data for topic: {}; with message {}", topic, message);
-        this.mTopic = topic;
+    public MqttMessageProcessor process(MqttMessage message, String kfkTopic, String kfkKey, org.apache.avro.Schema valueSchema, org.apache.avro.Schema keySchema) {
+        log.debug("processing data for topic: {}; with message {}", kfkTopic, message);
+        this.mKafkaKey = kfkKey;
         this.mMessage = message;
+        this.mKafkaTopic = kfkTopic;
         return this;
     }
 
     @Override
-    public SourceRecord[] getRecords(String kafkaTopic) {
-        return new SourceRecord[]{new SourceRecord(null, null, kafkaTopic, null,
-                Schema.STRING_SCHEMA, mTopic,
+    public SourceRecord[] getRecords() {
+        return new SourceRecord[]{new SourceRecord(null, null, mKafkaTopic, null,
+                Schema.STRING_SCHEMA, mKafkaKey,
                 Schema.BYTES_SCHEMA, mMessage.getPayload())};
     }
 }

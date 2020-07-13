@@ -26,37 +26,34 @@ import java.util.*;
 public class AvroProcessor implements MqttMessageProcessor {
     private static final Logger log = LoggerFactory.getLogger(AvroProcessor.class);
     private MqttMessage mMessage;
-    private String mTopic;
+    private String mKafkaKey;
     private SchemaAndValue mValueSchemaAndValue;
     private SchemaAndValue mKeySchemaAndValue;
     private AvroData avroData = new AvroData(new AvroDataConfig.Builder().build());
     private DecoderFactory decoderFactory = DecoderFactory.get();
     private Decoder decoder;
     private Object genericDatum;
+    private String mKafkaTopic;
 
     @Override
-    public MqttMessageProcessor process(String topic,
-                                        MqttMessage message,
-                                        int mqttTopicOffset,
+    public MqttMessageProcessor process(MqttMessage message,
+                                        String kafkaTopic,
+                                        String kafkaKey,
                                         org.apache.avro.Schema valueSchema,
                                         org.apache.avro.Schema keySchema) {
-        log.debug("processing data for topic: {}; with message {}", topic, message);
-
-        this.mTopic = Optional.of(topic)
-                .map(s -> s.split("/"))
-                .map(s -> s[s.length - mqttTopicOffset - 1])
-                .get();
+        log.info("processing data for topic: {}; with message {}", kafkaTopic, message);
 
         this.mMessage = message;
 
-        //  Struct st = new Struct(schema);
         String payloadString = new String(mMessage.getPayload(), StandardCharsets.UTF_8);
 
+        this.mKafkaTopic = kafkaTopic;
+        this.mKafkaKey = kafkaKey;
 
         this.mValueSchemaAndValue = getSchemaAndValue(valueSchema, payloadString, true);
 
         this.mKeySchemaAndValue = Optional.ofNullable(keySchema)
-                .map(schema -> getSchemaAndValue(schema, mTopic, false))
+                .map(schema -> getSchemaAndValue(schema, mKafkaKey, false))
                 .orElse(null);
 
         return this;
@@ -90,15 +87,15 @@ public class AvroProcessor implements MqttMessageProcessor {
     }
 
     @Override
-    public SourceRecord[] getRecords(String kafkaTopic) {
+    public SourceRecord[] getRecords() {
         return new SourceRecord[]{
-                new SourceRecord(null, null, kafkaTopic, null,
+                new SourceRecord(null, null, mKafkaTopic, null,
                         Optional.ofNullable(mKeySchemaAndValue)
                                 .map(SchemaAndValue::schema)
                                 .orElse(Schema.STRING_SCHEMA),
                         Optional.ofNullable(mKeySchemaAndValue)
                                 .map(SchemaAndValue::value)
-                                .orElse(mTopic),
+                                .orElse(mKafkaKey),
                         mValueSchemaAndValue.schema(),
                         mValueSchemaAndValue.value())
         };

@@ -272,7 +272,7 @@ public class MqttSourceTask extends SourceTask implements MqttCallback {
         String kfkKey = Optional.of(topic.split("/"))
                 .map(s -> s[s.length - mConfig.getInt(MqttSourceConstant.KAFKA_KEY_OFFSET) - 1])
                 .orElse(null);
-        log.info("kfktopic: {}, kfkkey: {}", kfkTopic, kfkKey);
+        log.debug("kfktopic: {}, kfkkey: {}", kfkTopic, kfkKey);
 
         this.mQueue.add(
                 mConfig.getConfiguredInstance(MqttSourceConstant.MESSAGE_PROCESSOR,

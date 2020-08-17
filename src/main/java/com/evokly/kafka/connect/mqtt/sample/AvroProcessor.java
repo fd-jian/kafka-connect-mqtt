@@ -41,7 +41,7 @@ public class AvroProcessor implements MqttMessageProcessor {
                                         String kafkaKey,
                                         org.apache.avro.Schema valueSchema,
                                         org.apache.avro.Schema keySchema) {
-        log.info("processing data for topic: {}; with message {}", kafkaTopic, message);
+        log.debug("processing data for topic: {}; with message {}", kafkaTopic, message);
 
         this.mMessage = message;
 

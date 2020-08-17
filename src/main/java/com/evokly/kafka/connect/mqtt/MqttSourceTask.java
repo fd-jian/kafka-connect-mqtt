@@ -8,9 +8,12 @@ package com.evokly.kafka.connect.mqtt;
 import com.evokly.kafka.connect.mqtt.sample.AvroProcessor;
 import com.evokly.kafka.connect.mqtt.ssl.SslUtils;
 import com.evokly.kafka.connect.mqtt.util.Version;
+import io.confluent.connect.avro.AvroData;
+import io.confluent.connect.avro.AvroDataConfig;
 import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import org.apache.avro.Schema;
+import org.apache.avro.io.DecoderFactory;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTask;
 import org.eclipse.paho.client.mqttv3.*;
@@ -37,6 +40,8 @@ public class MqttSourceTask extends SourceTask implements MqttCallback {
     MqttSourceConnectorConfig mConfig;
     private Schema mValueSchema;
     private Schema mKeySchema;
+    private final AvroData avroData = new AvroData(new AvroDataConfig.Builder().build());
+    private final DecoderFactory decoderFactory = DecoderFactory.get();
 
     /**
      * Get the version of this task. Usually this should be the same as the corresponding
@@ -272,12 +277,13 @@ public class MqttSourceTask extends SourceTask implements MqttCallback {
         String kfkKey = Optional.of(topic.split("/"))
                 .map(s -> s[s.length - mConfig.getInt(MqttSourceConstant.KAFKA_KEY_OFFSET) - 1])
                 .orElse(null);
-        log.info("kfktopic: {}, kfkkey: {}", kfkTopic, kfkKey);
+        log.debug("kfktopic: {}, kfkkey: {}", kfkTopic, kfkKey);
 
         this.mQueue.add(
                 mConfig.getConfiguredInstance(MqttSourceConstant.MESSAGE_PROCESSOR,
                         MqttMessageProcessor.class)
-                        .process(message, kfkTopic, kfkKey, mValueSchema, mKeySchema)
+                        .process(message, kfkTopic, kfkKey, mValueSchema, mKeySchema,
+                                avroData, decoderFactory)
         );
     }
 }

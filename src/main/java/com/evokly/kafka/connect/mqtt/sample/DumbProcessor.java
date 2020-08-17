@@ -1,6 +1,8 @@
 package com.evokly.kafka.connect.mqtt.sample;
 
 import com.evokly.kafka.connect.mqtt.MqttMessageProcessor;
+import io.confluent.connect.avro.AvroData;
+import org.apache.avro.io.DecoderFactory;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.eclipse.paho.client.mqttv3.MqttMessage;
@@ -20,7 +22,13 @@ public class DumbProcessor implements MqttMessageProcessor {
     private String mKafkaTopic;
 
     @Override
-    public MqttMessageProcessor process(MqttMessage message, String kfkTopic, String kfkKey, org.apache.avro.Schema valueSchema, org.apache.avro.Schema keySchema) {
+    public MqttMessageProcessor process(MqttMessage message,
+                                        String kfkTopic,
+                                        String kfkKey,
+                                        org.apache.avro.Schema valueSchema,
+                                        org.apache.avro.Schema keySchema,
+                                        AvroData avroData,
+                                        DecoderFactory decoderFactory) {
         log.debug("processing data for topic: {}; with message {}", kfkTopic, message);
         this.mKafkaKey = kfkKey;
         this.mMessage = message;

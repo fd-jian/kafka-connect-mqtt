@@ -40,9 +40,13 @@ public class AvroProcessor implements MqttMessageProcessor {
                                         String kafkaTopic,
                                         String kafkaKey,
                                         org.apache.avro.Schema valueSchema,
-                                        org.apache.avro.Schema keySchema) {
+                                        org.apache.avro.Schema keySchema,
+                                        AvroData avroData,
+                                        DecoderFactory decoderFactory) {
         log.debug("processing data for topic: {}; with message {}", kafkaTopic, message);
 
+        this.decoderFactory = decoderFactory;
+        this.avroData = avroData;
         this.mMessage = message;
 
         String payloadString = new String(mMessage.getPayload(), StandardCharsets.UTF_8);

@@ -1,5 +1,7 @@
 # Mqtt to Apache Kafka Connect 
 
+*Note*: This is a fork of [evokly/kafka-connect-mqtt](https://github.com/evokly/kafka-connect-mqtt)
+
 MQTT Plugin for Kafka Connect. Intended to be built and provided to a Kafka Connect instance.
 
 ## Usage
